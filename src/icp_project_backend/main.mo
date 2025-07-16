@@ -20,6 +20,7 @@ actor {
     public type UserRole = {
         #Admin;
         #User;
+        #Labeler;
     };
 
     public type UserProfile = {
@@ -30,6 +31,7 @@ actor {
     };
 
     let adminId : Text = "a7db5377686c7a0a34b2c99ccdbf3b727794f3341b88182f79ed287ccfec38bd";
+    let labelerId : Text = "b7db5377686c7a0a34b2c99ccdbf3b727794f3341b88182f79ed287ccfec38bd";
 
     var userProfiles = HashMap.HashMap<Text, UserProfile>(0, Text.equal, Text.hash);
     // HashMap for all the tasks
@@ -46,9 +48,12 @@ actor {
             case (null) {
                 let userRole : UserRole = if (userId == adminId) {
                     #Admin;
+                } else if (userId == labelerId) {
+                    #Labeler;
                 } else {
-                    #User;
+                    #User; // Default role for other users
                 };
+
                 // Jika profil belum ada, buat yang baru
                 let newProfile : UserProfile = {
                     id = userId;

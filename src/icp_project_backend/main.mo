@@ -17,7 +17,6 @@ actor {
         valid : Bool;
     };
 
-    //INI di pending dahulu, karena saya masih harus pelajari lagi
     public type UserRole = {
         #Admin;
         #User;
@@ -27,7 +26,10 @@ actor {
         id : Text;
         balance : Nat;
         tasksCompleted : Nat;
+        role : UserRole;
     };
+
+    let adminId : Text = "a7db5377686c7a0a34b2c99ccdbf3b727794f3341b88182f79ed287ccfec38bd";
 
     var userProfiles = HashMap.HashMap<Text, UserProfile>(0, Text.equal, Text.hash);
     // HashMap for all the tasks
@@ -42,11 +44,17 @@ actor {
                 return profile;
             };
             case (null) {
+                let userRole : UserRole = if (userId == adminId) {
+                    #Admin;
+                } else {
+                    #User;
+                };
                 // Jika profil belum ada, buat yang baru
                 let newProfile : UserProfile = {
                     id = userId;
                     balance = 0;
                     tasksCompleted = 0;
+                    role = userRole;
                 };
                 // Simpan profil baru, lalu kembalikan
                 userProfiles.put(userId, newProfile);

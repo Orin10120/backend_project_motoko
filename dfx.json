@@ -2,7 +2,8 @@
   "canisters": {
     "icp_project_backend": {
       "main": "src/icp_project_backend/main.mo",
-      "type": "motoko"
+      "type": "motoko",
+      "env_file": ".env"
     },
     "icp_project_frontend": {
       "dependencies": [

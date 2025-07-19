@@ -1,22 +1,18 @@
-import Nat "mo:base/Nat";
+import Nat64 "mo:base/Nat64";
 import Time "mo:base/Time";
 import Text "mo:base/Text";
 
-actor class generateUUID() {
-    stable var counter : Nat = 0;
-
-    public func generate() : async Text {
-        let timestamp = Time.now();
-        counter += 1;
-
-        let unique_id = debug_show (timestamp) # "-" # Nat.toText(counter);
+module {
+    public func generate() : Text {
+        let timestamp : Nat64 = Nat64.fromIntWrap(Time.now());
+        // Tidak bisa pakai stable var di module, jadi tidak ada counter di sini
+        let unique_id = Nat64.toText(timestamp);
         return unique_id;
     };
 
-    public func generateWithPrefix(prefix : Text) : async Text {
-        let timestamp = Time.now();
-        counter += 1;
-        let unique_id = prefix # "_" # debug_show (timestamp) # "_" # Nat.toText(counter);
+    public func generateWithPrefix(prefix : Text) : Text {
+        let timestamp : Nat64 = Nat64.fromIntWrap(Time.now());
+        let unique_id = prefix # "_" # Nat64.toText(timestamp);
         return unique_id;
     };
 };

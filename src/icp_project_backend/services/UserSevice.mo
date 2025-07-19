@@ -5,15 +5,15 @@ import Debug "mo:base/Debug";
 import HashMap "mo:base/HashMap";
 import Result "mo:base/Result";
 import DataType "../types/DataType";
-import DataUtil "../utils/DataUtil";
 import Iter "mo:base/Iter";
+import Array "mo:base/Array";
+import DataUtil "../utils/DataUtil";
 
-actor class UserService(uuid_generator_ref : DataUtil.generateUUID) {
+actor UserService {
+
     var user_profiles : HashMap.HashMap<Principal, DataType.UserProfile> = HashMap.HashMap(0, Principal.equal, Principal.hash);
     var transactions : [DataType.Transaction] = [];
     var labeling_logs : [DataType.LabelingLog] = [];
-
-    // let generateUUID = uuid_generator_ref.generate;
 
     public query func getAllUserProfiles() : async [DataType.UserProfile] {
         return Iter.toArray(user_profiles.vals());
@@ -26,7 +26,6 @@ actor class UserService(uuid_generator_ref : DataUtil.generateUUID) {
                 return (profile.principal_id, profile);
             },
         );
-
         user_profiles := HashMap.fromIter<Principal, DataType.UserProfile>(mapped, 0, Principal.equal, Principal.hash);
     };
 
@@ -50,9 +49,8 @@ actor class UserService(uuid_generator_ref : DataUtil.generateUUID) {
         labeling_logs := labeling_log;
     };
 
-    public func log_activty(principal : Principal, action : Text, data_item_id : ?Text, details : Text) : async () {
-
-        let new_long_id : Text = await uuid_generator_ref.generateWithPrefix("logs");
+    public func log_activity(principal : Principal, action : Text, data_item_id : ?Text, details : Text) : async () {
+        let new_log_id : Text = DataUtil.generateWithPrefix("logs");
 
         let non_optional_data_id : Text = switch (data_item_id) {
             case (?value) value;
@@ -60,7 +58,7 @@ actor class UserService(uuid_generator_ref : DataUtil.generateUUID) {
         };
 
         let new_log : DataType.LabelingLog = {
-            long_id = new_long_id;
+            long_id = new_log_id;
             principal_id = principal;
             action_type = action;
             data_item_id = non_optional_data_id;
@@ -68,30 +66,10 @@ actor class UserService(uuid_generator_ref : DataUtil.generateUUID) {
             timestamp = Time.now();
         };
 
-        let old_logs_iter = labeling_logs.vals();
-        let new_log_iter = ([new_log] : [DataType.LabelingLog]).vals();
-        let combined_iter = {
-            next = func() : ?DataType.LabelingLog {
-                // Selalu coba ambil dari iterator pertama dulu.
-                let first_result = old_logs_iter.next();
-
-                switch (first_result) {
-                    // Jika iterator pertama masih punya nilai, kembalikan nilai itu.
-                    case (?value) {
-                        return ?value;
-                    };
-                    // Jika iterator pertama sudah habis (null), kembalikan apa pun
-                    // hasil dari iterator kedua (bisa nilai, bisa null).
-                    case (null) {
-                        return new_log_iter.next();
-                    };
-                };
-            };
-        };
-        labeling_logs := Iter.toArray<DataType.LabelingLog>(combined_iter);
+        labeling_logs := Array.append(labeling_logs, [new_log]);
     };
 
-    public func transaction_log(
+    public func record_transaction(
         from_p : ?Principal,
         to_p : ?Principal,
         amount_t : Nat,
@@ -99,7 +77,7 @@ actor class UserService(uuid_generator_ref : DataUtil.generateUUID) {
         related_item_id : ?Text,
         memo : Text,
     ) : async () {
-        let new_transaction_id : Text = await uuid_generator_ref.generateWithPrefix("transaction");
+        let new_transaction_id : Text = DataUtil.generateWithPrefix("transaction");
 
         let new_transaction : DataType.Transaction = {
             transaction_id = new_transaction_id;
@@ -112,35 +90,13 @@ actor class UserService(uuid_generator_ref : DataUtil.generateUUID) {
             timestamp = Time.now();
         };
 
-        let old_transaction_iter = transactions.vals();
-        let new_transaction_iter = ([new_transaction] : [DataType.Transaction]).vals();
-        let combined_iter = {
-            next = func() : ?DataType.Transaction {
-                // Selalu coba ambil dari iterator pertama dulu.
-                let first_result = old_transaction_iter.next();
-
-                switch (first_result) {
-                    // Jika iterator pertama masih punya nilai, kembalikan nilai itu.
-                    case (?value) {
-                        return ?value;
-                    };
-                    // Jika iterator pertama sudah habis (null), kembalikan apa pun
-                    // hasil dari iterator kedua (bisa nilai, bisa null).
-                    case (null) {
-                        return new_transaction_iter.next();
-                    };
-                };
-            };
-        };
-        transactions := Iter.toArray<DataType.Transaction>(combined_iter);
+        transactions := Array.append(transactions, [new_transaction]);
     };
 
     public func createUserProfile(principal : Principal) : async Result.Result<DataType.UserProfile, Text> {
-
         if (user_profiles.get(principal) != null) {
             return #err("User profile already exists");
         };
-
         let new_profile : DataType.UserProfile = {
             principal_id = principal;
             labeled_count = 0;
@@ -152,7 +108,26 @@ actor class UserService(uuid_generator_ref : DataUtil.generateUUID) {
         return #ok(new_profile);
     };
 
-    // Helper Function: Add balance
+    public func get_or_create_user_profile(principal : Principal) : async DataType.UserProfile {
+        switch (user_profiles.get(principal)) {
+            case (?profile) profile;
+            case null {
+                let res = await createUserProfile(principal);
+                switch (res) {
+                    case (#ok(profile)) profile;
+                    case (#err(_)) {
+                        switch (user_profiles.get(principal)) {
+                            case (?profile2) profile2;
+                            case null {
+                                Debug.trap("Failed to create or get user profile");
+                            };
+                        };
+                    };
+                };
+            };
+        };
+    };
+
     public func add_balance(principal : Principal, amount : Nat) : async Result.Result<Null, Text> {
         switch (user_profiles.get(principal)) {
             case (?profile) {
@@ -165,7 +140,6 @@ actor class UserService(uuid_generator_ref : DataUtil.generateUUID) {
         };
     };
 
-    // Helper Function: Update labeled count
     public func update_user_labeled_count(principal : Principal) : async Result.Result<Null, Text> {
         switch (user_profiles.get(principal)) {
             case (?profile) {
@@ -176,7 +150,6 @@ actor class UserService(uuid_generator_ref : DataUtil.generateUUID) {
         };
     };
 
-    // Helper Function: Update validated count
     public func update_user_validated_count(principal : Principal) : async Result.Result<Null, Text> {
         switch (user_profiles.get(principal)) {
             case (?profile) {
@@ -187,94 +160,83 @@ actor class UserService(uuid_generator_ref : DataUtil.generateUUID) {
         };
     };
 
-    // // --- Public Functions for User Management ---
-    // public func deposit(userPrincipal : Principal, amount : Nat) : async Result.Result<Text, Text> {
-    //     let caller = userPrincipal;
-    //     if (caller == Principal.anonymous()) {
-    //         return #err("Authentication required.");
-    //     };
-    //     if (amount == 0) {
-    //         return #err("Deposit amount must be greater than zero.");
-    //     };
+    // --- Public Functions for User Management ---
+    public func deposit(userPrincipal : Principal, amount : Nat) : async Result.Result<Text, Text> {
+        let caller = userPrincipal;
+        if (Principal.isAnonymous(caller)) {
+            return #err("Authentication required.");
+        };
+        if (amount == 0) {
+            return #err("Deposit amount must be greater than zero.");
+        };
 
-    //     let creation_result = await createUserProfile(caller);
+        let profile = await get_or_create_user_profile(caller);
+        let new_balance = profile.balance + amount;
+        user_profiles.put(caller, { profile with balance = new_balance });
 
-    //      let profile : DataType.UserProfile = switch (await createUserProfile(caller)) {
-    //     case (#ok(p)) {
-    //         p;
-    //     };
-    //     case (#err(e)) {
-    //         return #err("Failed to get or create profile: " # e);
-    //     };
+        await record_transaction(
+            ?caller,
+            ?Principal.fromActor(UserService),
+            amount,
+            #Deposit(null),
+            null,
+            "User deposit",
+        );
+        await log_activity(caller, "DEPOSIT", null, "Deposited " # Nat.toText(amount));
+        return #ok("Deposit successful. Your new balance is: " # Nat.toText(new_balance));
+    };
 
-    //     let new_balance = profile.balance + amount;
-    //     user_profiles.put(caller, { profile with balance = new_balance });
+    public func withdraw(userPrincipal : Principal, amount : Nat) : async Result.Result<Text, Text> {
+        let caller = userPrincipal;
+        if (Principal.isAnonymous(caller)) {
+            return #err("Authentication required.");
+        };
+        if (amount == 0) {
+            return #err("Withdrawal amount must be greater than zero.");
+        };
 
-    //     await transaction_log(
-    //         ?caller,
-    //         ?Actor.self(),
-    //         amount,
-    //         #Deposit(null),
-    //         null,
-    //         ?"User deposit",
-    //     );
-    //     await log_activity(caller, "DEPOSIT", null, "Deposited ");
-    //     return #ok("Deposit successful. Your new balance is: ");
-    // };
+        let profile = await get_or_create_user_profile(caller);
+        if (profile.balance < amount) {
+            return #err("Insufficient balance. Current: " # Nat.toText(profile.balance) # ", Requested: " # Nat.toText(amount));
+        };
 
-    // public func withdraw(userPrincipal : Principal, amount : Nat) : async Result.Result<Text, Text> {
-    //     let caller = userPrincipal;
-    //     if (caller == Principal.anonymous()) {
-    //         return #err("Authentication required.");
-    //     };
-    //     if (amount == 0) {
-    //         return #err("Withdrawal amount must be greater than zero.");
-    //     };
+        let new_balance = profile.balance - amount;
+        user_profiles.put(caller, { profile with balance = new_balance });
 
-    //     let profile = await get_or_create_user_profile(caller);
-    //     if (profile.balance < amount) {
-    //         return #err("Insufficient balance. Current: " # Debug.show(profile.balance) # ", Requested: " # Debug.show(amount));
-    //     };
+        await record_transaction(
+            ?Principal.fromActor(UserService),
+            ?caller,
+            amount,
+            #Withdrawal(null),
+            null,
+            "User withdrawal",
+        );
+        await log_activity(caller, "WITHDRAWAL", null, "Withdrew " # Nat.toText(amount) # " tokens. New balance: " # Nat.toText(new_balance));
+        return #ok("Withdrawal successful. Your new balance is: " # Nat.toText(new_balance));
+    };
 
-    //     let new_balance = profile.balance - amount;
-    //     user_profiles.put(caller, { profile with balance = new_balance });
+    public query func getMyTransactions(userPrincipal : Principal) : async [DataType.Transaction] {
+        let caller = userPrincipal;
+        if (Principal.isAnonymous(caller)) { return [] };
 
-    //     await record_transaction(
-    //         ?Principal.fromActor(this),
-    //         ?caller,
-    //         amount,
-    //         #Withdrawal(null), // Variant types need a value, even if it's Null
-    //         null,
-    //         ?"User withdrawal",
-    //     );
-    //     await log_activity(caller, "WITHDRAWAL", null, "Withdrew " # Debug.show(amount) # " tokens. New balance: " # Debug.show(new_balance));
-    //     return #ok("Withdrawal successful. Your new balance is: " # Debug.show(new_balance));
-    // };
+        return Array.filter<DataType.Transaction>(
+            transactions,
+            func(tx) {
+                let is_sender = switch (tx.sender_principal) {
+                    case (?p) p == caller;
+                    case (null) false;
+                };
+                let is_receiver = switch (tx.receive_principal) {
+                    case (?p) p == caller;
+                    case (null) false;
+                };
+                is_sender or is_receiver;
+            },
+        );
+    };
 
-    // public query func getMyTransactions(userPrincipal : Principal) : async [DataType.Transaction] {
-    //     let caller = msg.caller();
-    //     if (caller == Principal.anonymous()) { return [] };
-
-    //     // FIX: Use Array.filter for filtering
-    //     return Array.filter<DataType.Transaction>(
-    //         transactions,
-    //         func(tx) {
-    //             // IMPROVEMENT: Use a safer way to check optionals
-    //             let is_sender = switch (tx.sender_principal) {
-    //                 case (?p) p == caller;
-    //                 case (null) false;
-    //             };
-    //             let is_receiver = switch (tx.receive_principal) {
-    //                 case (?p) p == caller;
-    //                 case (null) false;
-    //             };
-    //             return is_sender or is_receiver;
-    //         },
-    //     );
-    // };
-
-    // public query func getPlatformLogs() : async [DataType.LabelingLog] {
-    //     return labeling_logs;
-    // };
+    public query func getPlatformLogs() : async [DataType.LabelingLog] {
+        return labeling_logs;
+    };
 
 };

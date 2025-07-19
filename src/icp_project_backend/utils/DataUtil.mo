@@ -5,7 +5,6 @@ import Text "mo:base/Text";
 module {
     public func generate() : Text {
         let timestamp : Nat64 = Nat64.fromIntWrap(Time.now());
-        // Tidak bisa pakai stable var di module, jadi tidak ada counter di sini
         let unique_id = Nat64.toText(timestamp);
         return unique_id;
     };

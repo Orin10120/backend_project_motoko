@@ -89,7 +89,6 @@ actor {
             valid = false;
         };
 
-        // put the new task in tasks HashMap
         tasks.put(Nat.toText(presentId), task);
         return #ok("success");
     };
@@ -159,10 +158,8 @@ actor {
                     return #err("Tugas belum divalidasi. Anda belum bisa mengklaim hadiah.");
                 };
 
-                // 1. Dapatkan profil worker
                 let workerProfile = get_or_create_profile(workerId);
 
-                // 2. Update saldo dan jumlah tugas selesai
                 let updatedProfile : UserProfile = {
                     workerProfile with
                     balance = workerProfile.balance + task.prize;
@@ -170,7 +167,6 @@ actor {
                 };
                 userProfiles.put(workerId, updatedProfile);
 
-                // 3. Hapus tugas agar tidak bisa diklaim dua kali
                 tasks.delete(taskId);
 
                 let rewardMessage = "Selamat! Hadiah sebesar " # Nat.toText(task.prize) # " berhasil diklaim. Saldo Anda sekarang: " # Nat.toText(updatedProfile.balance);
@@ -183,7 +179,6 @@ actor {
         return tasks.get(taskId);
     };
 
-    // (BARU) Query untuk melihat profil seorang pengguna
     public shared query func getProfile(userId : Text) : async ?UserProfile {
         return userProfiles.get(userId);
     };
